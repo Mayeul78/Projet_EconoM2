@@ -12,28 +12,39 @@
     }
   },
   "cells": [
+
     {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
         "# BNP Paribas Stock Price Neural Network Analysis\n",
         "\n",
-        "This notebook:\n",
-        "1. Reads and cleans BNP Paribas stock price data.\n",
-        "2. Computes log returns.\n",
-        "3. Uses a simple feedforward neural network (Dense layers) to predict **next-day log returns** from the past 5 days of log returns.\n",
-        "4. Demonstrates an in-sample comparison of predictions for the first 100 days.\n",
+        "Below is a step-by-step Jupyter Notebook illustrating how to:\n",
+        "1. Load and clean BNP Paribas stock price data.\n",
+        "2. Compute log returns.\n",
+        "3. Prepare features and labels for a simple feedforward neural network.\n",
+        "4. Train the model to predict **next-day log returns** from the previous 5 days.\n",
+        "5. Evaluate on a small test set.\n",
+        "6. Perform an in-sample rolling prediction for the first 100 days.\n",
         "\n",
-        "Comments are added in each cell to clarify the process."
+        "Comments in each step clarify what’s happening."
       ]
     },
+
     {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "## Step 1: Load Libraries and Read CSV"
+        "## Step 1: Load Libraries and Read CSV\n",
+        "\n",
+        "**What We Do**\n",
+        "1. Import pandas, NumPy, matplotlib, and math.\n",
+        "2. Read in the BNP Paribas CSV file (adjust the path as needed).\n",
+        "3. Convert the Date column to `datetime`, sort by Date, remove missing/invalid Close values.\n",
+        "4. Compute log prices, log returns, and drop any infinities/NaNs."
       ]
     },
+
     {
       "cell_type": "code",
       "metadata": {},
@@ -43,60 +54,57 @@
         "import matplotlib.pyplot as plt\n",
         "import math\n",
         "\n",
-        "# Read BNP Paribas data (adjust path as needed)\n",
+        "# Read BNP Paribas data (adjust the path to your CSV)\n",
         "data_bnp = pd.read_csv('../data/BNPPA.csv')\n",
         "\n",
         "# Convert 'Date' column to datetime\n",
         "data_bnp['Date'] = pd.to_datetime(data_bnp['Date'])\n",
-        "\n",
-        "# Sort values by date\n",
         "data_bnp.sort_values('Date', inplace=True)\n",
-        "\n",
-        "# Reset index after sorting\n",
         "data_bnp.reset_index(drop=True, inplace=True)\n",
         "\n",
-        "# 1) Filter invalid or missing close prices\n",
-        "data_bnp = data_bnp[data_bnp['Close'].notna()]      # remove rows missing close\n",
-        "data_bnp = data_bnp[data_bnp['Close'] > 0]          # remove zero or negative\n",
+        "# Remove missing or invalid Close values\n",
+        "data_bnp = data_bnp[data_bnp['Close'].notna()]\n",
+        "data_bnp = data_bnp[data_bnp['Close'] > 0]\n",
         "\n",
-        "# 2) Compute log prices & returns\n",
+        "# Compute log prices and log returns\n",
         "data_bnp['LogClose'] = np.log(data_bnp['Close'])\n",
         "data_bnp['LogRet']   = data_bnp['LogClose'].diff()\n",
         "\n",
-        "# 3) Replace inf and drop NaNs that result (e.g., from diff of the first row)\n",
+        "# Replace infinite values and drop NaNs\n",
         "data_bnp.replace([np.inf, -np.inf], np.nan, inplace=True)\n",
         "data_bnp.dropna(subset=['LogRet'], inplace=True)\n",
         "\n",
-        "# Inspect final cleaned dataframe\n",
+        "# Inspect the first few rows of the cleaned DataFrame\n",
         "data_bnp.head()"
       ],
       "outputs": []
     },
+
     {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "## Step 2: Prepare Data for Neural Network\n",
+        "## Step 2: Prepare Data for the Neural Network\n",
         "\n",
-        "We’ll use a sliding-window approach:\n",
-        "- For each day \\(t\\), predict \\(\\text{LogRet}[t]\\) using the **previous 5 days** of log returns.\n",
-        "\n",
-        "If we have \\(N\\) log returns, that creates \\(N-5\\) labeled samples."
+        "**What We Do**\n",
+        "1. Extract the `LogRet` column as a NumPy array.\n",
+        "2. Define a window of size 5. For each day \\( t \\), the input features are the **previous 5** log returns, and the label is the **current** log return.\n",
+        "3. Append these to lists `X` and `y`, then convert to NumPy arrays."
       ]
     },
+
     {
       "cell_type": "code",
       "metadata": {},
       "source": [
-        "# Create X, y using a window of size 5\n",
         "logrets = data_bnp['LogRet'].values  # shape (N,)\n",
         "window_size = 5\n",
         "X, y = [], []\n",
         "\n",
         "for i in range(window_size, len(logrets)):\n",
-        "    # Feature: previous 5 days' log returns\n",
-        "    X.append(logrets[i-window_size:i])\n",
-        "    # Label: today's log return\n",
+        "    # The 5 previous returns (features)\n",
+        "    X.append(logrets[i - window_size:i])\n",
+        "    # The current day's return (label)\n",
         "    y.append(logrets[i])\n",
         "\n",
         "X = np.array(X)\n",
@@ -107,15 +115,19 @@
       ],
       "outputs": []
     },
+
     {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
         "## Step 3: (Optional) Train/Test Split\n",
         "\n",
-        "We’ll keep it simple. We’ll train on most of the data and test on the last 100 points. Adjust as needed."
+        "**What We Do**\n",
+        "1. Decide how many points to keep in the test set (e.g., last 100 days).\n",
+        "2. Slice `X` and `y` into `(X_train, y_train)` and `(X_test, y_test)`."
       ]
     },
+
     {
       "cell_type": "code",
       "metadata": {},
@@ -129,18 +141,23 @@
       ],
       "outputs": []
     },
+
     {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
         "## Step 4: Build and Train a Simple Neural Network\n",
         "\n",
-        "We’ll use [Keras](https://keras.io/) for a straightforward implementation:\n",
-        "- Input layer = 5 neurons (each of the 5 past log returns)\n",
-        "- Hidden layer = 16 neurons (ReLU)\n",
-        "- Output layer = 1 neuron (the predicted next-day log return)"
+        "**What We Do**\n",
+        "1. Install/import TensorFlow and Keras.\n",
+        "2. Define a basic feedforward network with:\n",
+        "   - Input layer size = 5 (one neuron per log-return in the window)\n",
+        "   - Hidden layer = 16 neurons (ReLU)\n",
+        "   - Output layer = 1 neuron (predicted next-day log return)\n",
+        "3. Compile with MSE loss and train on `(X_train, y_train)`."
       ]
     },
+
     {
       "cell_type": "code",
       "metadata": {},
@@ -160,15 +177,8 @@
         "    optimizer=Adam(learning_rate=0.001)\n",
         ")\n",
         "\n",
-        "model_nn.summary()"
-      ],
-      "outputs": []
-    },
-    {
-      "cell_type": "code",
-      "metadata": {},
-      "source": [
-        "# Train the network\n",
+        "model_nn.summary()\n",
+        "\n",
         "history = model_nn.fit(\n",
         "    X_train, y_train,\n",
         "    epochs=20,\n",
@@ -177,7 +187,7 @@
         "    verbose=1\n",
         ")\n",
         "\n",
-        "# Optional: plot training loss\n",
+        "# Plot training history\n",
         "plt.figure(figsize=(8, 4))\n",
         "plt.plot(history.history['loss'], label='Train Loss')\n",
         "plt.plot(history.history['val_loss'], label='Val Loss')\n",
@@ -189,15 +199,19 @@
       ],
       "outputs": []
     },
+
     {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
-        "## Step 5: Evaluate on Test Set\n",
+        "## Step 5: Evaluate on the Test Set\n",
         "\n",
-        "Compute MSE on the last 100 data points for a quick sense of performance."
+        "**What We Do**\n",
+        "1. Predict on `X_test`.\n",
+        "2. Calculate Mean Squared Error (MSE) vs. `y_test`."
       ]
     },
+
     {
       "cell_type": "code",
       "metadata": {},
@@ -208,19 +222,22 @@
       ],
       "outputs": []
     },
+
     {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
         "## Step 6: In-Sample Rolling Prediction (First 100 Days)\n",
         "\n",
-        "We’ll do an in-sample style approach for the **first 100** data points to parallel the HMM example. \n",
-        "1. Use the actual data for the previous 5 days to predict day `t`. \n",
-        "2. Compare the predicted price path vs. the actual price.\n",
+        "**What We Do**\n",
+        "1. Use a \"rolling\" approach for the first 100 days:\n",
+        "   - For each day \\( t \\ge 5 \\), feed the previous 5 actual returns to the model.\n",
+        "2. Convert the predicted log returns into a price path and compare against the actual price.\n",
         "\n",
-        "*Note*: This does **not** necessarily measure out-of-sample performance but is a quick way to visualize how the model fits."
+        "*Note*: This is just a demonstration of how the model fits in-sample, not a true out-of-sample test."
       ]
     },
+
     {
       "cell_type": "code",
       "metadata": {},
@@ -228,45 +245,43 @@
         "def rolling_prediction_in_sample(model, logrets, window_size=5, length=100):\n",
         "    \"\"\"\n",
         "    In-sample rolling prediction for the first `length` days.\n",
-        "    For each day t >= window_size, we use the actual log returns from t-window_size..t-1\n",
+        "    For each day t >= window_size, use the actual log returns from [t - window_size..t-1]\n",
         "    to predict logRet[t].\n",
         "    \"\"\"\n",
         "    if length <= window_size:\n",
         "        raise ValueError(\"length must be > window_size\")\n",
         "\n",
         "    predicted_returns = []\n",
-        "    # We'll only get predictions for days [window_size..length-1]\n",
         "    for t in range(window_size, length):\n",
-        "        x_input = logrets[t-window_size:t]\n",
-        "        x_input = x_input.reshape(1, -1)\n",
+        "        x_input = logrets[t - window_size:t].reshape(1, -1)\n",
         "        pred = model.predict(x_input)[0, 0]\n",
         "        predicted_returns.append(pred)\n",
+        "\n",
         "    return np.array(predicted_returns)\n",
         "\n",
         "length_ = 100\n",
         "logrets_array = data_bnp['LogRet'].values\n",
         "\n",
+        "# Generate rolling predictions for the first 100 days\n",
         "preds_in_sample = rolling_prediction_in_sample(model_nn, logrets_array, window_size=5, length=length_)\n",
-        "# This yields (length_ - 5) predictions for days 5..99\n",
         "\n",
-        "# Convert predicted log returns to predicted prices\n",
+        "# Actual closing prices for the first 100 days\n",
         "actual_prices_100 = data_bnp['Close'].values[:length_]\n",
         "pred_prices = [actual_prices_100[0]]\n",
         "\n",
-        "# For the first 5 points, we have no prediction yet. We'll replicate actual prices.\n",
+        "# For the first 5 days, replicate actual prices\n",
         "for i in range(1, 5):\n",
         "    pred_prices.append(actual_prices_100[i])\n",
         "\n",
-        "# For days 5..99, use predicted log returns\n",
+        "# From day 5..99, use predicted log returns to compute price\n",
         "for i in range(5, length_):\n",
-        "    # i-5 is the index into preds_in_sample\n",
         "    pred_logret = preds_in_sample[i - 5]\n",
         "    next_price = pred_prices[-1] * np.exp(pred_logret)\n",
         "    pred_prices.append(next_price)\n",
         "\n",
         "pred_prices = np.array(pred_prices)\n",
         "\n",
-        "# Plot results\n",
+        "# Plot actual vs. predicted\n",
         "plt.figure(figsize=(10, 6))\n",
         "plt.plot(range(length_), actual_prices_100, label='Actual Price (first 100 days)', color='blue')\n",
         "plt.plot(range(length_), pred_prices, label='NN In-Sample Predicted Price', color='red', linestyle='--')\n",
@@ -278,20 +293,24 @@
       ],
       "outputs": []
     },
+
     {
       "cell_type": "markdown",
       "metadata": {},
       "source": [
         "## Step 7: Conclusion\n",
         "\n",
-        "We used a simple feedforward neural network to model next-day log returns from the previous 5 days of returns. \n",
-        "You can enhance this approach by:\n",
-        "- Tuning the network architecture (more layers, more neurons, etc.).\n",
-        "- Trying different history window lengths.\n",
-        "- Switching to an LSTM or GRU for time-series-specific architectures.\n",
-        "- Implementing a walk-forward backtesting approach for more realistic evaluation.\n",
+        "**What We Did**\n",
+        "- Loaded BNP Paribas stock data and computed log returns.\n",
+        "- Prepared a 5-day rolling window of features to predict the next-day log return.\n",
+        "- Built a simple feedforward neural network with one hidden layer.\n",
+        "- Trained it on most of the data and tested on the last 100 data points.\n",
+        "- Demonstrated an in-sample rolling prediction for the first 100 days.\n",
         "\n",
-        "This notebook shows the basic process end-to-end."
+        "**Possible Extensions**\n",
+        "- Try a deeper network or an LSTM/GRU for more advanced time-series modeling.\n",
+        "- Adjust the window size (more or fewer days).\n",
+        "- Implement a walk-forward or rolling train/test methodology for a more realistic evaluation."
       ]
     }
   ]
